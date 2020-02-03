@@ -4,16 +4,34 @@
 
 <head>
 
+  <title>Testing</title>
+  <link rel='stylesheet' href='test_style.css'>
   <script src='test_script.js'></script>
 
   <p>head</head>
 
-  <link rel="stylesheet" href="test_style.css">
-
 </head>
 
-<body>
+<body onload="init()">
 
+  <table style='align:center;'>holaaasssssss
+    <tr>
+      <th style='color:white;'>2D Canvas</th>
+      <th style='color:white;'>3D Canvas</th>
+    </tr>
+
+
+    <tr>
+      <th>
+        <canvas id="myCanvas2D" width="200" height="200"></canvas>
+      </th>
+      <th>
+        <canvas id="myCanvas3D" width="200" height="200"></canvas>
+      </th>
+  </table>
+
+
+  <img id='bg_image' src='ellegant1.jpg'>
   <h1>My First Heading</h1>
 
   <p id='firstone' style="color:red;">My first paragraph.</p>
@@ -23,5 +41,40 @@
   <button>
 
 </body>
+
+<script>
+  function init() {
+      /* 2D canvas */
+      var canvas = document.getElementById("myCanvas2D");
+      var context = canvas.getContext("2d");
+      context.moveTo(0, 0); /*Pencil place - FROM*/
+      context.lineTo(200, 200); /*Pencil place - TO*/
+      context.lineWidth=10;
+      context.strokeStyle='white';
+      context.stroke();
+      /* 3D canvas */
+      var canvas3D = document.getElementById("myCanvas3D");
+      var gl = canvas3D.getContext('webgl');
+      gl.clearColor(0.0, 0.0, 1.0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+</script>
+
+<script>
+  var vs = document.getElementById('shaderVs').innerHTML;
+  var fs = document.getElementById('shaderFs').innerHTML;
+</script>
+
+<script id="shaderVs" type="x-shader/x-vertex"> /*Vertext Shader*/
+  void main() {
+    gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+    gl_PointSize = 10.0;
+  }
+</script>
+<script id="shaderFs" type="x-shader/x-fragment"> /*Fragment Shader*/
+  void main() {
+    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  }
+</script>
 
 </html>
