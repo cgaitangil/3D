@@ -1,20 +1,18 @@
 <!DOCTYPE html>
 <html>
 
-<body onload="init()">
+<body style='background-color:#070720;' onload="init()">
 
 
   <!--img id='bg_image' src='ellegant1.jpg'></img-->
   <canvas id="myCanvas" width="500" height="500"></canvas>
 
-  <script>
-    var vs = document.getElementById('shaderVs').innerHTML;
-    var fs = document.getElementById('shaderFs').innerHTML;
-  </script>
   <script id="shaderVs" type="x-shader/x-vertex"> /*Vertext Shader*/
+    attribute vec4 a_Position;
+    attribute flo a_Size;
     void main() {
-      gl_Position = vec4(0.5, 0.3, 0.0, 1.0);
-      gl_PointSize = 20.0;
+      gl_Position = a_Position;
+      gl_PointSize = a_Size;
     }
   </script>
   <script id="shaderFs" type="x-shader/x-fragment"> /*Fragment Shader*/
@@ -25,52 +23,80 @@
 
   <script>
     function init() {
-      console.log('init...');
 
+      console.log('init...');
+      var points = [];
 
       /* 3D canvas */
       // Get canvas object from the DOM
-      var canvas3D = document.getElementById("myCanvas");
+      var canvas = document.getElementById("myCanvas");
       //0 Init WebGL context
-      var gl = myCanvas.getContext("webgl");
+      var gl = canvas.getContext("webgl");
       if (!gl) {
         console.log("Failed to get the rendering context for WebGL");
         return;
       }
+
       // Clear canvas
       gl.clearColor(0.0, 0.0, 0.0, 1.0);
       gl.clear(gl.COLOR_BUFFER_BIT);
+
       // Init shaders
       var vs = document.getElementById('shaderVs').innerHTML;
       var fs = document.getElementById('shaderFs').innerHTML;
       if (!initShaders(gl, vs, fs)) {
         console.log('Failed to intialize shaders.');
-      return;
+        return;
       }
       // Draw
       gl.drawArrays(gl.POINTS, 0, 1);
+
+      // Register event handler
+      canvas.onmousedown = function(ev) {
+        click(ev, gl, canvas);
+      };
+
+      function click(ev, gl, canvas) {
+        console.log('init...');
+
+        // Coordinates of canvas origin
+        var rect = ev.target.getBoundingClientRect();
+        // relative x coordinate of click in canvas
+        var clickX = ev.clientX - rect.left;
+        // relative y coordinate of click in canvas
+        var clickY = ev.clientY - rect.top;
+        // WebGL coordinates (3D)
+        var halfCanvasWidth = canvas.width / 2;
+        var halfCanvasHeight = canvas.height / 2;
+        var x = (clickX - halfCanvasWidth) / halfCanvasWidth;
+        var y = (halfCanvasHeight - clickY) / halfCanvasHeight;
+        var xyz = [x, y, 0];
+        points.push(xyz);
+        console.log(points);
+
+        //---------Print everything
+        //Background
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        //Objects
+        var a_Position = gl.getAttribLocation(gl.program, "a_Position");
+        var a_Size = gl.getAttribLocation(gl.program, "a_Size");
+        for (i in points) {
+          //Position
+          gl.vertexAttrib3fv(a_Position, points[i]);
+          //Color
+          if (points[i][0] < 0) {gl.vertexAttribPointer(a_Size, 20.0);}
+
+          gl.drawArrays(gl.POINTS, 0, 1);
+        }
+
+
+
+      }
+
     }
 
-    // Register event handler
-    canvas.onmousedown = function(ev) {
-      click(ev, gl, canvas);
-    };
 
-    function click(ev, gl, canvas) {
-      // Coordinates of canvas origin
-     var rect = ev.target.getBoundingClientRect();
-     // relative x coordinate of click in canvas
-     var clickX = ev.clientX - rect.left;
-     // relative y coordinate of click in canvas
-     var clickY = ev.clientY - rect.top;
-     // WebGL coordinates (3D)
-     var halfCanvasWidth = canvas.width / 2;
-     var halfCanvasHeight = canvas.height / 2;
-     var x = (clickX - halfCanvasWidth) / halfCanvasWidth;
-     var y = (halfCanvasHeight - clickY) / halfCanvasHeight;
-     var xyz = [x, y, 0];
-     console.log(xyz);
-    }
 
     function initShaders(gl, vs_source, fs_source) {
       // Compile shaders
