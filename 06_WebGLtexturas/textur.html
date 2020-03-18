@@ -1,0 +1,465 @@
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <title>WebGL textures: cube</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+</head>
+
+<body onload="init()" style='background-color:#070720;'>
+  <canvas id="myCanvas" width="500" height="500"></canvas>
+  <p style='color:white;'>
+    Step: <input type="text" value="0.1" id="step">
+  </p>
+</body>
+
+<script id="shaderVs" type="x-shader/x-vertex">
+  attribute vec4 a_Position;
+  attribute vec2 a_TexCoord;
+  varying vec2 v_TexCoord;
+  uniform mat4 u_pMatrix;
+  uniform mat4 u_vMatrix;
+  uniform mat4 u_mvMatrix;
+  varying highp vec4 v_Color;
+  void main() {
+    gl_Position = u_pMatrix * u_vMatrix * u_mvMatrix * a_Position;
+    v_TexCoord = a_TexCoord;
+  }
+</script>
+<script id="shaderFs" type="x-shader/x-fragment">
+  precision highp float;
+  precision mediump float;
+  uniform sampler2D u_Sampler0; // Arrow
+  uniform sampler2D u_Sampler1; // Circle
+  varying vec2 v_TexCoord;
+  void main(void) {
+    vec4 color0 = texture2D(u_Sampler0, v_TexCoord);
+    vec4 color1 = texture2D(u_Sampler1, v_TexCoord);
+    gl_FragColor = color0 * color1;
+  }
+</script>
+
+<script>
+
+  var gl;
+  var count = 0.0;
+  var vertexesAndTextures = [];
+  var z = -3.0;
+
+  function init() {
+
+    var canvas = document.getElementById("myCanvas");
+    gl = canvas.getContext("webgl");
+    var vs = document.getElementById('shaderVs').innerHTML;
+    var fs = document.getElementById('shaderFs').innerHTML;
+    initShaders(gl, vs, fs);
+
+    // Init vertex shader
+    initVertexShader(gl);
+
+    // Init projection matrix
+    initProjection(gl, canvas);
+
+    // Set clear canvas color
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+    // Hidden surface removal
+    gl.enable(gl.DEPTH_TEST);
+
+    // Init textures
+    initTexturesAndDraw(gl);
+
+    document.addEventListener('wheel', function (event) {
+      if (event.wheelDelta > 0) {
+        z += 1;
+      } else {
+        z -= 1
+      };
+      var vMatrixUniform = gl.getUniformLocation(gl.program, "u_vMatrix");
+      var vMatrix = mat4.lookAt(mat4.create(),  [0, 0, z],
+                                                [0, 0, 0],
+                                                [0, 1, 0]);
+      gl.uniformMatrix4fv(vMatrixUniform, false, vMatrix);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      // Draw
+      gl.drawElements(gl.TRIANGLES, 6 * 2 * 3, gl.UNSIGNED_SHORT, 0);
+    });
+
+    var rot_axis = ''; // count reset if in other axis (for switch cases)
+    document.onkeydown = function (ev) {
+      // parseFloat() -> correct sum operation
+      step = parseFloat(document.getElementById("step").value);
+      console.log(step);
+
+      switch (ev.keyCode) {
+        case 37: // Left
+          if (rot_axis == 'x') {
+            count = 0.0;
+          } else {
+            count += step;
+          }
+          vertexesAndTextures = [
+            // Vertexes and texturecoordinates (X, Y, Z, S, T)
+            // S - T --->
+            //    top left Fron = top left Back = top left Left = top left Right
+            //Front
+            -0.5, -0.5, -0.5,     0.0, 1.0, // bot left
+            0.5, -0.5, -0.5,      0.0, 0.0, // bot right
+            0.5, 0.5, -0.5,       1.0, 0.0, // top right
+            -0.5, 0.5, -0.5,      1.0, 1.0, // top left
+            //Back (we want right arrow here to see it as a left arrow)
+            -0.5, -0.5, 0.5,      1.0, 0.0, // top left
+            0.5, -0.5, 0.5,       1.0, 1.0, // top right
+            0.5, 0.5, 0.5,        0.0, 1.0, // bot right
+            -0.5, 0.5, 0.5,       0.0, 0.0, // bot left
+            //Left
+            -0.5, -0.5, -0.5,     0.0, 0.0, // bot right
+            -0.5, 0.5, -0.5,      1.0, 0.0, // top right
+            -0.5, 0.5, 0.5,       1.0, 1.0, // top left
+            -0.5, -0.5, 0.5,      0.0, 1.0, // bot left
+            //Right
+            0.5, -0.5, -0.5,      0.0, 1.0, // bot left
+            0.5, 0.5, -0.5,       1.0, 1.0, // top left
+            0.5, 0.5, 0.5,        1.0, 0.0, // top right
+            0.5, -0.5, 0.5,       0.0, 0.0, // bot right
+            // No need to be specified (we dont see them)----------
+            // same as right and left faces when we rotate in X axis
+            -0.5, -0.5, -0.5,     0.0, 0.0,
+            -0.5, -0.5, 0.5,      0.0, 1.0,
+            0.5, -0.5, 0.5,       1.0, 1.0,
+            0.5, -0.5, -0.5,      1.0, 0.0,
+            //-----------------------------------------------------
+            -0.5, 0.5, -0.5,      0.0, 1.0,
+            -0.5, 0.5, 0.5,       0.0, 0.0,
+            0.5, 0.5, 0.5,        1.0, 0.0,
+            0.5, 0.5, -0.5,       1.0, 1.0,
+            //-----------------------------------------------------
+          ];
+          var mvMatrix = mat4.fromYRotation(mat4.create(),
+                                            count, [0.5, 0.5, 0.5]);
+          rot_axis = 'y';
+          break;
+        case 39: // Right
+          if (rot_axis == 'x') {
+            count = 0.0;
+          } else {
+            count -= step;
+          }
+          vertexesAndTextures = [
+            // Vertexes and texturecoordinates (X, Y, Z, S, T)
+            // S - T --->
+            //    top left Fron = top left Left = top left Right
+            //Front
+            -0.5, -0.5, -0.5,     1.0, 0.0, // bot left
+            0.5, -0.5, -0.5,      1.0, 1.0, // bot right
+            0.5, 0.5, -0.5,       0.0, 1.0, // top right
+            -0.5, 0.5, -0.5,      0.0, 0.0, // top left
+            //Back (we want left arrow here to see it as a right arrow)
+            -0.5, -0.5, 0.5,      0.0, 1.0, // top left
+            0.5, -0.5, 0.5,       0.0, 0.0, // top right
+            0.5, 0.5, 0.5,        1.0, 0.0, // bot right
+            -0.5, 0.5, 0.5,       1.0, 1.0, // bot left
+            //Left
+            -0.5, -0.5, -0.5,     1.0, 1.0, // bot right
+            -0.5, 0.5, -0.5,      0.0, 1.0, // top right
+            -0.5, 0.5, 0.5,       0.0, 0.0, // top left
+            -0.5, -0.5, 0.5,      1.0, 0.0, // bot left
+            //Right
+            0.5, -0.5, -0.5,      1.0, 0.0, // bot left
+            0.5, 0.5, -0.5,       0.0, 0.0, // top left
+            0.5, 0.5, 0.5,        0.0, 1.0, // top right
+            0.5, -0.5, 0.5,       1.0, 1.0, // bot right
+            // No need to be specified (we dont see them)----------
+            // same as right and left faces when we rotate in X axis
+            -0.5, -0.5, -0.5,     0.0, 0.0,
+            -0.5, -0.5, 0.5,      0.0, 1.0,
+            0.5, -0.5, 0.5,       1.0, 1.0,
+            0.5, -0.5, -0.5,      1.0, 0.0,
+            //-----------------------------------------------------
+            -0.5, 0.5, -0.5,      0.0, 1.0,
+            -0.5, 0.5, 0.5,       0.0, 0.0,
+            0.5, 0.5, 0.5,        1.0, 0.0,
+            0.5, 0.5, -0.5,       1.0, 1.0,
+            //-----------------------------------------------------
+          ];
+          var mvMatrix = mat4.fromYRotation(mat4.create(),
+                                            count, [0.5, 0.5, 0.5]);
+          rot_axis = 'y';
+          break;
+        case 38: // Up
+          if (rot_axis == 'y') {
+            count = 0.0;
+          } else {
+            count -= step;
+          }
+          vertexesAndTextures = [
+            // Vertexes and texturecoordinates (X, Y, Z, S, T)
+            // S - T --->
+            //    top left Fron = top left Back = top left Bot = top left Top
+            //Front
+            -0.5, -0.5, -0.5,     0.0, 1.0, // bot left
+            0.5, -0.5, -0.5,      1.0, 1.0, // bot right
+            0.5, 0.5, -0.5,       1.0, 0.0, // top right
+            -0.5, 0.5, -0.5,      0.0, 0.0, // top left
+            //Back
+            -0.5, -0.5, 0.5,      0.0, 0.0, // top left
+            0.5, -0.5, 0.5,       1.0, 0.0, // top right
+            0.5, 0.5, 0.5,        1.0, 1.0, // bot right
+            -0.5, 0.5, 0.5,       0.0, 1.0, // bot left
+            //Left
+            -0.5, -0.5, -0.5,     0.0, 0.0, // bot right
+            -0.5, 0.5, -0.5,      1.0, 0.0, // top right
+            -0.5, 0.5, 0.5,       1.0, 1.0, // top left
+            -0.5, -0.5, 0.5,      0.0, 1.0, // bot left
+            //Right
+            0.5, -0.5, -0.5,      0.0, 1.0, // bot left
+            0.5, 0.5, -0.5,       1.0, 1.0, // top left
+            0.5, 0.5, 0.5,        1.0, 0.0, // top right
+            0.5, -0.5, 0.5,       0.0, 0.0, // bot right
+            //Bot
+            -0.5, -0.5, -0.5,     0.0, 0.0, // top left
+            -0.5, -0.5, 0.5,      0.0, 1.0, // bot left
+            0.5, -0.5, 0.5,       1.0, 1.0, // bot right
+            0.5, -0.5, -0.5,      1.0, 0.0, // top right
+            //Top
+            -0.5, 0.5, -0.5,      0.0, 1.0, // bot left
+            -0.5, 0.5, 0.5,       0.0, 0.0, // top left
+            0.5, 0.5, 0.5,        1.0, 0.0, // top right
+            0.5, 0.5, -0.5,       1.0, 1.0, // bot right
+          ];
+          var mvMatrix = mat4.fromXRotation(mat4.create(),
+                                            count, [0.5, 0.5, 0.5]);
+          rot_axis = 'x';
+          break;
+        case 40: // Down
+          if (rot_axis == 'y') {
+            count = 0.0;
+          } else {
+            count += step;
+          }
+          vertexesAndTextures = [
+            // Vertexes and texturecoordinates (X, Y, Z, S, T)
+            // S - T --->
+            //    top left Fron = top left Back = top left Bot = top left Top
+            //Front
+            -0.5, -0.5, -0.5,     1.0, 0.0, // bot left
+            0.5, -0.5, -0.5,      0.0, 0.0, // bot right
+            0.5, 0.5, -0.5,       0.0, 1.0, // top right
+            -0.5, 0.5, -0.5,      1.0, 1.0, // top left
+            //Back
+            -0.5, -0.5, 0.5,      1.0, 1.0, // top left
+            0.5, -0.5, 0.5,       0.0, 1.0, // top right
+            0.5, 0.5, 0.5,        0.0, 0.0, // bot right
+            -0.5, 0.5, 0.5,       1.0, 0.0, // bot left
+            //Left
+            -0.5, -0.5, -0.5,     0.0, 0.0, // bot right
+            -0.5, 0.5, -0.5,      1.0, 0.0, // top right
+            -0.5, 0.5, 0.5,       1.0, 1.0, // top left
+            -0.5, -0.5, 0.5,      0.0, 1.0, // bot left
+            //Right
+            0.5, -0.5, -0.5,      0.0, 1.0, // bot left
+            0.5, 0.5, -0.5,       1.0, 1.0, // top left
+            0.5, 0.5, 0.5,        1.0, 0.0, // top right
+            0.5, -0.5, 0.5,       0.0, 0.0, // bot right
+
+            -0.5, -0.5, -0.5,     1.0, 1.0, // top left
+            -0.5, -0.5, 0.5,      1.0, 0.0, // bot left
+            0.5, -0.5, 0.5,       0.0, 0.0, // bot right
+            0.5, -0.5, -0.5,      0.0, 1.0, // top right
+
+            -0.5, 0.5, -0.5,      1.0, 0.0, // bot left
+            -0.5, 0.5, 0.5,       1.0, 1.0, // top left
+            0.5, 0.5, 0.5,        0.0, 1.0, // top right
+            0.5, 0.5, -0.5,       0.0, 0.0, // bot right
+          ];
+          var mvMatrix = mat4.fromXRotation(mat4.create(),
+                                            count, [0.5, 0.5, 0.5]);
+          rot_axis = 'x';
+          break;
+        case 33: // PageUp
+          break;
+        case 34: // PageDown
+          break;
+        case 36: // Home
+          break
+        case 35: // End
+          break;
+      };
+
+      // Clear
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      // Image direction
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexesAndTextures),
+                    gl.STATIC_DRAW);
+      // Rotate
+      var uMvMatrix = gl.getUniformLocation(gl.program, "u_mvMatrix");
+      gl.uniformMatrix4fv(uMvMatrix, false, mvMatrix);
+      // Draw
+      gl.drawElements(gl.TRIANGLES, 6 * 2 * 3, gl.UNSIGNED_SHORT, 0);
+
+    };
+  };
+
+  function initVertexShader(gl) {
+    vertexesAndTextures = [
+      // Vertexes and texturecoordinates (X, Y, Z, S, T)
+      -0.5, -0.5, -0.5,     0.0, 1.0, // bot left
+      0.5, -0.5, -0.5,      0.0, 0.0, // bot right
+      0.5, 0.5, -0.5,       1.0, 0.0, // top right
+      -0.5, 0.5, -0.5,      1.0, 1.0, // top left
+
+      -0.5, -0.5, 0.5,      1.0, 0.0, // top left
+      0.5, -0.5, 0.5,       1.0, 1.0, // top right
+      0.5, 0.5, 0.5,        0.0, 1.0, // bot right
+      -0.5, 0.5, 0.5,       0.0, 0.0, // bot left
+
+      -0.5, -0.5, -0.5,     0.0, 0.0, // bot right
+      -0.5, 0.5, -0.5,      1.0, 0.0, // top right
+      -0.5, 0.5, 0.5,       1.0, 1.0, // top left
+      -0.5, -0.5, 0.5,      0.0, 1.0, // bot left
+
+      0.5, -0.5, -0.5,      0.0, 1.0, // bot left
+      0.5, 0.5, -0.5,       1.0, 1.0, // top left
+      0.5, 0.5, 0.5,        1.0, 0.0, // top right
+      0.5, -0.5, 0.5,       0.0, 0.0, // bot right
+
+      -0.5, -0.5, -0.5,     0.0, 0.0,
+      -0.5, -0.5, 0.5,      0.0, 1.0,
+      0.5, -0.5, 0.5,       1.0, 1.0,
+      0.5, -0.5, -0.5,      1.0, 0.0,
+
+      -0.5, 0.5, -0.5,      0.0, 1.0,
+      -0.5, 0.5, 0.5,       0.0, 0.0,
+      0.5, 0.5, 0.5,        1.0, 0.0,
+      0.5, 0.5, -0.5,       1.0, 1.0,
+    ];
+
+    // Indexes
+    var indexes = [
+        0, 1, 2,
+        0, 2, 3,
+
+        4, 5, 6,
+        4, 6, 7,
+
+        8, 9, 10,
+        8, 10, 11,
+
+        12, 13, 14,
+        12, 14, 15,
+
+        16, 17, 18,
+        16, 18, 19,
+
+        20, 21, 22,
+        20, 22, 23
+    ];
+
+    // Write a_Position and a_TexCoord using gl.ARRAY_BUFFER
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexesAndTextures),
+                  gl.STATIC_DRAW);
+
+    var vertexPositionAttribute = gl.getAttribLocation(gl.program,
+                                                       "a_Position");
+    gl.enableVertexAttribArray(vertexPositionAttribute);
+    gl.vertexAttribPointer(vertexPositionAttribute, 3,
+                           gl.FLOAT, false, 4 * (3 + 2), 0);
+
+    var vertexColorAttribute = gl.getAttribLocation(gl.program, "a_TexCoord");
+    gl.enableVertexAttribArray(vertexColorAttribute);
+    gl.vertexAttribPointer(vertexColorAttribute, 2,
+                           gl.FLOAT, false, 4 * (3 + 2), 4 * 3);
+
+    // Write indexes in gl.ELEMENT_ARRAY_BUFFER
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,
+                  new Uint16Array(indexes), gl.STATIC_DRAW);
+  }
+
+  function initProjection(gl, canvas) {
+    // Write u_pMatrix
+    var pMatrixUniform = gl.getUniformLocation(gl.program, "u_pMatrix");
+    var ratio = canvas.width / canvas.height;
+    var pMatrix = mat4.perspective(mat4.create(), 150, ratio, 0.1, 100);
+    gl.uniformMatrix4fv(pMatrixUniform, false, pMatrix);
+
+    // Write u_vMatrix
+    var vMatrixUniform = gl.getUniformLocation(gl.program, "u_vMatrix");
+    var vMatrix = mat4.lookAt(mat4.create(), [0, 0, -3], [0, 0, 0], [0, 1, 0]);
+    gl.uniformMatrix4fv(vMatrixUniform, false, vMatrix);
+  }
+
+  function initTexturesAndDraw(gl) {
+    var image0 = new Image();
+    image0.src = 'arrow.jpg';
+    var image1 = new Image();
+    image1.src = 'circle.gif';
+    image0.onload = function () {
+      loadTexture(gl, "u_Sampler0", image0, 0, true);
+      image1.onload = function () {
+        loadTexture(gl, "u_Sampler1", image1, 1, true);
+        drawScene();
+      };
+    };
+  }
+
+  function loadTexture(gl, samplerUniform, image, unitNumber, flip) {
+    // Flip the image's y axis
+    //gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flip);
+    // Activate and configure texture
+    gl.activeTexture(gl.TEXTURE0 + unitNumber);
+    gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    // Set texture to the sampler
+    var fragmentSamplerUniform = gl.getUniformLocation(gl.program, samplerUniform);
+    gl.uniform1i(fragmentSamplerUniform, unitNumber);
+
+  }
+
+  function drawScene() {
+    // Clear
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    // Rotate
+    var mvMatrix = mat4.fromYRotation(mat4.create(), count, [0.5, 0.5, 0.5]);
+    var uMvMatrix = gl.getUniformLocation(gl.program, "u_mvMatrix");
+    gl.uniformMatrix4fv(uMvMatrix, false, mvMatrix);
+    // Draw
+    gl.drawElements(gl.TRIANGLES, 6 * 2 * 3, gl.UNSIGNED_SHORT, 0);
+  }
+
+  function initShaders(gl, vs_source, fs_source) {
+    // Compile shaders
+    var vertexShader = makeShader(gl, vs_source, gl.VERTEX_SHADER);
+    var fragmentShader = makeShader(gl, fs_source, gl.FRAGMENT_SHADER);
+
+    // Create program
+    var glProgram = gl.createProgram();
+
+    // Attach and link shaders to the program
+    gl.attachShader(glProgram, vertexShader);
+    gl.attachShader(glProgram, fragmentShader);
+    gl.linkProgram(glProgram);
+
+    // Use program
+    gl.useProgram(glProgram);
+    gl.program = glProgram;
+  }
+
+  function makeShader(gl, src, type) {
+    var shader = gl.createShader(type);
+    gl.shaderSource(shader, src);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      alert("Error compiling shader: " + gl.getShaderInfoLog(shader));
+      return;
+    }
+    return shader;
+  }
+
+</script>
+
+</html>
