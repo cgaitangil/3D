@@ -1,0 +1,527 @@
+<!--
+
+    Partes implementadas:
+      - Funcionalidad básica
+      - Funcionalidad avanzada:
+        > ángulo de rebote variable
+        > velocidad de desplazamiento vertical variable
+      - Mejoras:
+        > 3 niveles de dificultad
+        > Marcador 3D
+
+-->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>HockeyPong</title>
+  <link rel="icon" type="image/png" href="favicon2.png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/103/three.min.js">
+  </script>
+</head>
+
+<script>
+  // ball -> same stepX for IA (top border)
+  var stepX = 0.2;
+  var stepY = 0.2;
+  // from out of canvas <- user (adjust difficulty)
+  var ia_step = 0;
+  // user movement with keyboard
+  var direction = 'stop';
+
+  var pause = 'false';
+  var initgame = 'false';
+  var difficulty = 'none';
+
+  var cpupoints = 0;
+  var userpoints = 0;
+
+  var initialpos = 0; // user position when cpu hits the ball
+  var collisionpos = 0; // user position when user hits the ball
+
+  var scene = new THREE.Scene();
+  var sceneWidth = window.innerWidth - 40;
+  var sceneHeight = window.innerHeight - 20;
+
+  scene.background = new THREE.Color(0x4b4e68);
+
+  function init() {
+
+    // THREE.PerspectiveCamera(fov, ratio, near, far);
+    //          FIELD OF VIEW  fov=90º PC games
+    // near y far: planos recorte cercano y lejano
+    var camera = new THREE.PerspectiveCamera(90, sceneWidth / sceneHeight,
+                                             0.01, 100);
+
+    // ejeX (rojo) , ejeZ (verde,negativo hacia cam) , ejeY (azul)
+    camera.position.set(0, -20, 10);
+    camera.lookAt(scene.position);
+
+    var renderer = new THREE.WebGLRenderer({
+       antialias : true
+    });
+    renderer.shadowMap.enabled = true;
+    renderer.setSize(sceneWidth, sceneHeight);
+    document.body.appendChild(renderer.domElement);
+
+    var light = getLight();
+    var amlight = new THREE.AmbientLight( 0x404040 ); // soft white light
+
+    // name, ancho, largo, alto, posX, posZ (+z -> screen), posY
+    var leftBorder = getBorder("left", 1, 20, 1, -5, 0, 0.5);
+    var rightBorder = getBorder("right", 1, 20, 1, 5, 0, 0.5);
+    var topBorder = getBorder("top", 3, 1, 2, 0, 9.5, 1);
+    var downBorder = getBorder("down", 3, 1, 2, 0, -9.5, 1);
+
+    var sphere = getSphere();
+    var floor = getFloor();
+
+    var statictext = statictextfun(scene);
+    var pointstext = pointstextfun(scene, userpoints, cpupoints);
+
+    scene.add(light);
+    scene.add(amlight );
+    scene.add(leftBorder);
+    scene.add(rightBorder);
+    scene.add(topBorder);
+    scene.add(downBorder);
+    scene.add(sphere);
+    scene.add(floor);
+
+    var borders = [ leftBorder, rightBorder, topBorder, downBorder ];
+
+    document.addEventListener("keydown", onDocumentKeyDown, false);
+
+    animate(sphere, borders, renderer, scene, camera);
+  }
+
+  function onDocumentKeyDown(event) {
+    var keyCode = event.which;
+    // Left Arrow - Moves User border
+    if (keyCode == 37) {
+      direction = 'left';
+    // Right Arrow - Moves User border
+    } else if (keyCode == 39) {
+      direction = 'right';
+    }
+    // Space - Initiates the Game
+    else if (keyCode == 32) {
+      pointstextfun(scene, userpoints, cpupoints);
+      initgame = 'true';
+      if (document.getElementById('difficulty').value != 'Escoger dificultad') {
+        difficulty = document.getElementById('difficulty').value;
+      }
+    }
+    // Escape - Pauses the Game
+    else if (keyCode == 27) {
+      if (pause == 'true'){
+        pause = 'false';
+      } else if (pause == 'false'){
+        pause = 'true';
+      }
+    }
+  };
+
+  function animate(sphere, borders, renderer, scene, camera) {
+
+    if ( (pause == 'false') && (initgame == 'true') && (difficulty != 'none') ){
+    //-----------------------------------------
+
+      checkCollision(sphere, borders);
+
+      sphere.position.x += stepX;
+      sphere.position.y += stepY;
+
+      // Setting cpu move speed by difficulty var <- select input in body
+      if (difficulty == 'easy') {
+        var cpustepX = stepX*0.3;
+      }
+      if (difficulty == 'normal') {
+        var cpustepX = stepX*0.5;
+      }
+      if (difficulty == 'hard') {
+        var cpustepX = stepX*0.7;
+      }
+
+      // CPU
+        // moves until left-end of top-border (IA) collides with right-end of
+        // left-border being stepX negative
+        // right border = [1] | left border = [0] both weight = 1
+        // IA (top border) = [2] | weigth = 3
+      if (stepX < 0) {
+        if ( (borders[2].position.x - 1.5) > (borders[0].position.x + 0.5) ) {
+          if ( !( (borders[2].position.x-1.5+stepX)<(borders[0].position.x+0.5) ) ) {
+            borders[2].position.x += cpustepX;
+          }
+        }
+      }
+        // OR until right-end of top-border (IA) collides with left-end of
+        // right-border being stepX positive
+      if (stepX > 0) {
+        if ( (borders[2].position.x + 1.5) < (borders[1].position.x - 0.5) ) {
+          if ( !( (borders[2].position.x+1.5+stepX)>(borders[1].position.x-0.5) ) ) {
+              borders[2].position.x += cpustepX;
+          }
+        }
+      }
+
+      // User
+      if (direction == 'left') {
+        // move until left-end of bot-border (user)
+        //          collides with right-end of left-border
+        if ((borders[3].position.x - 1.5) > (borders[0].position.x + 0.5)) {
+          borders[3].position.x -= 0.2;
+        }
+      } else if (direction == 'right') {
+        // move until right-end of bot-border (user)
+        //          collides with left-end of right-border
+        if ((borders[3].position.x + 1.5) < (borders[1].position.x - 0.5)) {
+          borders[3].position.x += 0.2;
+        }
+      }
+      // Not moving if we stop pressing buttons
+      direction = 'stop';
+    };
+
+    // Points
+    if ( (sphere.position.y+0.5) > ((borders[2].position.y)+0.5) ) {
+      // reset positions
+      sphere.position.x = 0;
+      sphere.position.y = 0;
+      borders[2].position.x = 0;
+      borders[3].position.x = 0;
+      // changing points text
+      userpoints += 1;
+      if (userpoints == 5) {
+        resulttextfun(scene, 'user');
+        userpoints = 0;
+        cpupoints = 0;
+      } else {
+        pointstextfun(scene, userpoints, cpupoints);
+      }
+      resetsteps();
+      // space for starting again
+      initgame = 'false';
+    }
+    else if ( (sphere.position.y-0.5) < (borders[3].position.y-0.5) ) {
+      // reset positions
+      sphere.position.x = 0;
+      sphere.position.y = 0;
+      borders[2].position.x = 0;
+      borders[3].position.x = 0;
+      // changing points text
+      cpupoints += 1;
+      if (cpupoints == 5) {
+        resulttextfun(scene, 'cpu');
+        cpupoints = 0;
+        userpoints = 0;
+      } else {
+        pointstextfun(scene, userpoints, cpupoints);
+      }
+      resetsteps();
+      // space for starting again
+      initgame = 'false';
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(function() {
+      animate(sphere, borders, renderer, scene, camera);
+    });
+
+  }// end animate function -----------------------------------------------------
+
+  function resetsteps() {
+    stepX = 0.2;
+    if (stepY < 0) {
+      stepY = -0.2;
+    } else {
+      stepY = 0.2;
+    }
+  }
+
+  function pointstextfun(scene, userp, cpup) {
+    // from result scene to 0-0 score scene
+    if (scene.getObjectByName('resulttext')) {
+      scene.remove(scene.getObjectByName('resulttext'));
+    }
+
+    var loader = new THREE.FontLoader();
+    loader.load( 'fonts/helvetiker_bold.typeface.json', function ( font ) {
+      if (scene.getObjectByName('usertext')) {
+        scene.remove(scene.getObjectByName('usertext'));
+      }
+      var txt = new THREE.TextGeometry( 'User\n  ' + userp, {
+        font: font,
+        size: 5,
+        height: 0.01,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.2,
+        bevelSize: 0.1,
+        bevelOffset: 0,
+        bevelSegments: 0.1
+      } );
+      var mat = new THREE.MeshBasicMaterial({color: 0x070720});
+      var mesh = new THREE.Mesh(txt, mat);
+      mesh.name = 'usertext';
+      mesh.position.set(-30, 20, 5);
+      mesh.rotation.x += 1.4;
+      mesh.rotation.y += 1.3;
+      mat.side = THREE.DoubleSide;
+      scene.add(mesh);
+    } );
+    loader.load( 'fonts/helvetiker_bold.typeface.json', function ( font ) {
+      if (scene.getObjectByName('cputext')) {
+        scene.remove(scene.getObjectByName('cputext'));
+      }
+      var txt = new THREE.TextGeometry( 'CPU\n  ' + cpup, {
+        font: font,
+        size: 5,
+        height: 0.01,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.2,
+        bevelSize: 0.1,
+        bevelOffset: 0,
+        bevelSegments: 0.1
+      } );
+      var mat = new THREE.MeshBasicMaterial({color: 0x070720});
+      var mesh = new THREE.Mesh(txt, mat);
+      mesh.name = 'cputext';
+      mesh.position.set(26, 32, 2);
+      mesh.rotation.x += 1.4;
+      mesh.rotation.y += -1.4;
+      mat.side = THREE.DoubleSide;
+      scene.add(mesh);
+    } );
+  }
+
+  function statictextfun(scene) {
+    // Header text
+    var loader = new THREE.FontLoader();
+    loader.load( 'fonts/helvetiker_bold.typeface.json', function ( font ) {
+      var txt = new THREE.TextGeometry( 'HockeyPong', {
+        font: font,
+        size: 5,
+        height: 0.01,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.5,
+        bevelSize: 0.2,
+        bevelOffset: 0,
+        bevelSegments: 0.7
+      } );
+      var mat = new THREE.MeshBasicMaterial({color: 0x070720}); //070720
+      var mesh = new THREE.Mesh(txt, mat);
+      mesh.position.set(-21, 12, 14);
+      mesh.rotation.x += 2;
+      mat.side = THREE.DoubleSide;
+      scene.add(mesh);
+    } );
+    // Info text
+    var loader = new THREE.FontLoader();
+    loader.load( 'fonts/helvetiker_bold.typeface.json', function ( font ) {
+      var txt = new THREE.TextGeometry( '       [Space] - Start\n[Esc] - Pause/Continue', {
+        font: font,
+        size: 1,
+        height: 0.01,
+        curveSegments: 15,
+        bevelEnabled: true,
+        bevelThickness: 0.01,
+        bevelSize: 0.01,
+        bevelOffset: 0,
+        bevelSegments: 0.7
+      } );
+      var mat = new THREE.MeshBasicMaterial({color: 0x070720});
+      var mesh = new THREE.Mesh(txt, mat);
+      mesh.position.set(-7, 0, -38);
+      mesh.rotation.x += 0;
+      mat.side = THREE.DoubleSide;
+      scene.add(mesh);
+    } );
+  }
+
+  function resulttextfun(scene, winner) {
+    // Header text
+    scene.remove(scene.getObjectByName('usertext'));
+    scene.remove(scene.getObjectByName('cputext'));
+    var loader = new THREE.FontLoader();
+    loader.load( 'fonts/helvetiker_bold.typeface.json', function ( font ) {
+      if (winner == 'cpu') {
+        var t = 'Has perdido!'
+      }
+      else if (winner == 'user') {
+        var t = 'Has ganado!'
+      }
+      var txt = new THREE.TextGeometry( t, {
+        font: font,
+        size: 3,
+        height: 0.01,
+        curveSegments: 2,
+        bevelEnabled: true,
+        bevelThickness: 0.5,
+        bevelSize: 0.1,
+        bevelOffset: 0,
+        bevelSegments: 0.7
+      } );
+      var mat = new THREE.MeshBasicMaterial({color: 0x070720});
+      var mesh = new THREE.Mesh(txt, mat);
+      mesh.name = 'resulttext';
+      mesh.position.set(-12, 12, 4);
+      mesh.rotation.x += 1.5;
+      mat.side = THREE.DoubleSide;
+      scene.add(mesh);
+    } );
+  }
+
+  function getLight() {
+    var light = new THREE.DirectionalLight();
+    light.position.set(4, -1, 4);
+    light.castShadow = true;
+    light.shadow.camera.near = 0;
+    light.shadow.camera.far = 16;
+    light.shadow.camera.left = -8;
+    light.shadow.camera.right = 5;
+    light.shadow.camera.top = 10;
+    light.shadow.camera.bottom = -10;
+    light.shadow.mapSize.width = 4096;
+    light.shadow.mapSize.height = 4096;
+    return light;
+  }
+
+  function getSphere() {
+    var geometry = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 40);
+    var texture = new THREE.TextureLoader().load("ball.png");
+    var material = new THREE.MeshLambertMaterial({map : texture});
+    var mesh = new THREE.Mesh(geometry, material);
+    mesh.position.z = 0.25;
+    mesh.position.x = 0.1;
+    mesh.castShadow = true;
+    mesh.name = "sphere";
+    mesh.rotation.x += 1.6;
+    return mesh;
+  }
+
+  function getFloor() {
+    var geometry = new THREE.PlaneGeometry(10, 20);
+    var texture = new THREE.TextureLoader().load("rink.png");
+    var material = new THREE.MeshLambertMaterial({ map : texture });
+    var mesh = new THREE.Mesh(geometry, material);
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  function getBorder(name, x, y, z, posX, posY, posZ) {
+    var geometry = new THREE.BoxGeometry(x, y, z);
+    var mesh = new THREE.Mesh(geometry, getMaterial(name));
+    mesh.receiveShadow = true;
+    mesh.position.set(posX, posY, posZ);
+    mesh.name = name;
+    return mesh;
+  }
+
+  function getMaterial(name) {
+    var texture = new THREE.TextureLoader().load("stick.png");
+    var material = new THREE.MeshPhysicalMaterial({
+      map : texture
+    });
+    if ( (name=='left') || (name=='right') ){
+      material.map.wrapS = material.map.wrapT = THREE.RepeatWrapping;
+      material.map.repeat.set(4, 4);
+    }
+    material.side = THREE.DoubleSide;
+    return material;
+  }
+
+  function checkCollision(sphere, borders) {
+    var originPosition = sphere.position.clone();
+    for (var i = 0; i < sphere.geometry.vertices.length; i++) {
+      var localVertex = sphere.geometry.vertices[i].clone();
+      var globalVertex = localVertex.applyMatrix4(sphere.matrix);
+      var directionVector = globalVertex.sub(sphere.position);
+      var ray = new THREE.Raycaster(originPosition, directionVector.clone().normalize());
+      var collisionResults = ray.intersectObjects(borders);
+      if (collisionResults.length > 0 && collisionResults[0].distance < directionVector.length()) {
+        // Collision detected
+        if (collisionResults[0].object.name == "left" || collisionResults[0].object.name == "right") {
+          stepX *= -1;
+        }
+        if (collisionResults[0].object.name == "down" || collisionResults[0].object.name == "top") {
+          stepY *= -1;
+          // Changing also the value of the step -> angle
+          if (collisionResults[0].object.name == "down") {
+            // down -> borders[3], width = 3
+            // collision with edges of the border, USER
+            if ( ( sphere.position.x > (borders[3].position.x+0.5) ) ||
+                 ( sphere.position.x < (borders[3].position.x-0.5) ) ){
+              // step lowest value -> changing if not lower than 0.1
+              if ( !(stepY < 0.1) ) {
+                stepY /= 1.2;
+              }
+            }
+            // collision with the center of the border
+            else {
+              // step greatest value -> changing if not greater than 0.25
+              if ( !(stepY > 0.25) ) {
+                stepY *= 1.2;
+              }
+            }
+            // Vertical speed - Changing stepX
+            collisionpos = borders[3].position.x;
+            // floor width = 10
+            if ( Math.abs(initialpos - collisionpos) > 3 ) {
+              if (stepX > 0) {
+                stepX = 0.2;
+              }
+              if (stepX < 0) {
+                stepX = -0.2;
+              }
+            } else {
+              if (stepX > 0) {
+                stepX = 0.15;
+              }
+              if (stepX < 0) {
+                stepX = -0.15;
+              }
+            }
+          }
+          // top -> borders[2], width = 3
+          // collision with edges of the border, CPU
+          if (collisionResults[0].object.name == "top") {
+            if ( ( sphere.position.x > (borders[2].position.x+0.5) ) ||
+                 ( sphere.position.x < (borders[2].position.x-0.5) ) ){
+              if ( !(Math.abs(stepY) < 0.1) ) {
+                stepY /= 1.2;
+              }
+            }
+            else {
+              if ( !(Math.abs(stepY) > 0.25) ) {
+                stepY *= 1.2;
+              }
+            }
+            // for vertical speed
+            initialpos = borders[3].position.x;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+</script>
+
+<body style='background-color:#070720' onload="init()">
+  <div align='center' font-family='Helvetica'>
+    <br>
+    <select style='background-color:#8e93d4;border-color: transparent;' id="difficulty">
+      <option style='display:none'>Escoger dificultad</option>
+      <option value="easy">Easy</option>
+      <option value="normal">Normal</option>
+      <option value="hard">Hard</option>
+    </select>
+  </div>
+  <br>
+</body>
+
+</html>
